@@ -87,6 +87,21 @@
 #include "binary_manager/binary_manager.h"
 #endif
 
+#include <tinyara/irq.h>
+//#include <tinyara/arch.h>
+#include "../../arch/arm/src/imxrt/imxrt_gpio.h"
+#include "../../arch/arm/include/imxrt/imxrt105x_irq.h"
+#include "../../arch/arm/src/imxrt/chip/imxrt105x_pinmux.h"
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
+#define IOMUX_SW8       (IOMUX_SLEW_FAST | IOMUX_DRIVE_50OHM | \
+		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
+		_IOMUX_PULL_ENABLE)
+
+static int chk_irq_handler = 0;
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -214,6 +229,61 @@ static inline void os_workqueues(void)
 
 #endif							/* CONFIG_SCHED_WORKQUEUE */
 
+static int gpio_1_21_handler(int irq, FAR void *context, FAR void *arg)
+{
+	chk_irq_handler++;
+	return 0;
+}
+
+static int gpio_task(int argc, char **argv)
+{
+	int ret;
+	bool val = true;
+	gpio_pinset_t w_set;
+	gpio_pinset_t r_set;
+
+	gpio_pinset_t port_1_pin_20;
+	gpio_pinset_t port_1_pin_21;
+
+	w_set = GPIO_PIN20 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	ret = imxrt_config_gpio(w_set);//GPIO_1_20 - WRITE
+	if (ret != OK) {
+		lldbg("config fail for port_1_pin_20, write.\n");
+		return -1;
+	}
+
+	r_set = GPIO_PIN21 | GPIO_PORT1 | IOMUX_SW8 | GPIO_INTERRUPT | GPIO_INT_RISINGEDGE;//GPIO_INT_FALLINGEDGE;
+	ret = imxrt_config_gpio(r_set);//GPIO_1_21 - READ
+	if (ret != OK) {
+		lldbg("config fail for port_1_pin_21, read.\n");
+		return -1;
+	}
+
+	ret = irq_attach(IMXRT_IRQ_GPIO1_21, (xcpt_t)gpio_1_21_handler, (void *)0);
+	if (ret != OK) {
+		lldbg("irq_attach fail.\n");
+		return -1;
+	}
+
+	up_enable_irq(IMXRT_IRQ_GPIO1_21);
+
+	port_1_pin_20 = GPIO_PORT1 | GPIO_PIN20;
+	port_1_pin_21 = GPIO_PORT1 | GPIO_PIN21;
+
+	val = imxrt_gpio_read(r_set);
+	lldbg("port_1_pin_21 READ - default val : %d\n", val);
+
+	sleep(1);
+
+	imxrt_gpio_write(w_set, true);
+
+	sleep(3);
+
+	lldbg("Check IRQ Handler : %d\n", chk_irq_handler);
+
+	return 0;
+}
+
 /****************************************************************************
  * Name: os_start_application
  *
@@ -265,6 +335,11 @@ static inline void os_do_appstart(void)
 		svdbg("Failed to create application init thread\n");
 	}
 #endif
+
+	pid = kernel_thread("gpio_test", 100, 1024, gpio_task, NULL);
+	if (pid < 0) {
+		sdbg("Failed to start binary manager");
+	}
 
 #ifdef CONFIG_BINARY_MANAGER
 	svdbg("Starting binary manager thread\n");
