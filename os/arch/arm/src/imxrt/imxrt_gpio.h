@@ -187,6 +187,7 @@
 #define GPIO_ALT2            (2 << GPIO_ALT_SHIFT)  /* Alternate function 2 */
 #define GPIO_ALT3            (3 << GPIO_ALT_SHIFT)  /* Alternate function 3 */
 #define GPIO_ALT4            (4 << GPIO_ALT_SHIFT)  /* Alternate function 4 */
+#define GPIO_ALT5            (5 << GPIO_ALT_SHIFT)  /* Alternate function 4 */
                                                       /* Alternate function 5 is GPIO */
 #define GPIO_ALT6            (6 << GPIO_ALT_SHIFT)  /* Alternate function 6 */
 #define GPIO_ALT7            (7 << GPIO_ALT_SHIFT)  /* Alternate function 7 */
