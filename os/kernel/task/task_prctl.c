@@ -72,6 +72,18 @@
 #include "sched/sched.h"
 #include "task/task.h"
 
+#include "../../arch/arm/include/imxrt/imxrt105x_irq.h"
+#include "../../arch/arm/src/imxrt/imxrt_gpio.h"
+#include "../../arch/arm/src/imxrt/chip/imxrt105x_pinmux.h"
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
+#define IOMUX_SW8       (IOMUX_SLEW_FAST | IOMUX_DRIVE_50OHM | \
+		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
+		_IOMUX_PULL_ENABLE)
+
 /************************************************************************
  * Private Functions
  ************************************************************************/
@@ -214,6 +226,46 @@ int prctl(int option, ...)
 	err = ENOSYS;
 	goto errout;
 #endif
+	case TC_ADD_PIN21_HANDLER:
+	{
+		int ret;
+		void *handler = va_arg(ap, void *);
+		gpio_pinset_t r_set;
+
+		r_set = GPIO_PIN21 | GPIO_PORT1 | IOMUX_SW8 | GPIO_INTERRUPT | GPIO_INT_RISINGEDGE;//GPIO_INT_FALLINGEDGE;
+		ret = imxrt_config_gpio(r_set);//GPIO_1_21 - READ
+		if (ret != OK) {
+			lldbg("config fail for port_1_pin_21, read.\n");
+			return -1;
+		}
+
+		ret = irq_attach(IMXRT_IRQ_GPIO1_21, (xcpt_t)handler, (void *)0);
+		if (ret != OK) {
+			lldbg("irq_attach fail.\n");
+			return -1;
+		}
+
+		up_enable_irq(IMXRT_IRQ_GPIO1_21);
+		lldbg("Success to register handler\n");
+	}
+	break;
+
+	case TC_WRITE_TO_PIN22:
+	{
+//		int ret;
+		gpio_pinset_t w_set;
+
+		w_set = GPIO_PIN20 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+//		ret = imxrt_config_gpio(w_set);//GPIO_1_22 - WRITE
+//		if (ret != OK) {
+//			lldbg("config fail for port_1_pin_22, write.\n");
+//			return -1;
+//		}
+
+		imxrt_gpio_write(w_set, false);
+//		lldbg("Success to write 20 false\n");
+	}
+	break;
 
 	default:
 		sdbg("Unrecognized option: %d\n", option);
