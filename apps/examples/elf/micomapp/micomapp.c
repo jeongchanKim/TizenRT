@@ -21,16 +21,46 @@
  ****************************************************************************/
 
 #include <stdio.h>
+#include <sched.h>
 #include <unistd.h>
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+void gpio_handler(int signo)
+{
+	//write to pin22
+	prctl(TC_WRITE_TO_PIN22, NULL);
+}
+
 int main(int argc, char **argv)
 {
+	int ret;
+	struct sigaction act;
+	sigset_t sigset;
+	struct sched_param param;
+	param.sched_priority = 120;
+
+	printf("[%d] MICOM ALIVE\n", getpid());
+
+	sched_setparam(getpid(), &param);
+
+	//register signal handler
+	act.sa_handler = (_sa_handler_t)gpio_handler;
+	act.sa_flags = 0;
+
+	sigfillset(&sigset);
+	sigdelset(&sigset, 1);
+	(void)sigprocmask(SIG_SETMASK, &sigset, NULL);
+
+	ret = sigaction(1, &act, NULL);
+	if (ret == (int)SIG_ERR) {
+		printf("sigaction Failed\n");
+		return -1;
+	}
+
 	while (1) {
 		sleep(10);
-		printf("[%d] MICOM ALIVE\n", getpid());
 	}
 
 	return 0;

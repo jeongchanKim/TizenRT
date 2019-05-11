@@ -109,6 +109,7 @@ int up_memfault(int irq, FAR void *context, FAR void *arg)
 	/* Dump some memory management fault info */
 
 	(void)irqsave();
+	/*
 	lldbg("PANIC!!! Memory Management Fault:\n");
 	mfdbg("  IRQ: %d context: %p\n", irq, regs);
 	lldbg("  CFAULTS: %08x MMFAR: %08x\n",
@@ -139,7 +140,7 @@ int up_memfault(int irq, FAR void *context, FAR void *arg)
 		  current_regs[REG_XPSR], current_regs[REG_PRIMASK]);
 #endif
 #endif
-
+*/
 	PANIC();
 	return OK;					/* Won't get here */
 }

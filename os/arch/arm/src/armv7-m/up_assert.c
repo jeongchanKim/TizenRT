@@ -100,6 +100,20 @@
 #include "up_internal.h"
 #include "mpu.h"
 
+#include <tinyara/arch.h>
+#include <signal.h>
+#include "../../../../arch/arm/src/imxrt/imxrt_gpio.h"
+#include "../../../../arch/arm/include/imxrt/imxrt105x_irq.h"
+#include "../../../../arch/arm/src/imxrt/chip/imxrt105x_pinmux.h"
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
+#define IOMUX_SW8       (IOMUX_SLEW_FAST | IOMUX_DRIVE_50OHM | \
+		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
+		_IOMUX_PULL_ENABLE)
+
 #ifdef CONFIG_BINMGR_RECOVERY
 bool abort_mode = false;
 uint32_t assert_pc;
@@ -427,9 +441,9 @@ static void _up_assert(int errorcode)
 		for (;;) {
 #ifdef CONFIG_ARCH_LEDS
 			//board_autoled_on(LED_PANIC);
-			up_mdelay(250);
+//			up_mdelay(250);
 			//board_autoled_off(LED_PANIC);
-			up_mdelay(250);
+//			up_mdelay(250);
 #endif
 		}
 #endif
@@ -448,6 +462,8 @@ static void _up_assert(int errorcode)
 		}
 
 		/* Send a message to fault manager with pid of the faulty task */
+//		kill(6, 23);
+		//lldbg("ddddd\n");
 		ret = mq_send(g_binmgr_mq_fd, (const char *)&request_msg, sizeof(binmgr_request_t), BINMGR_FAULT_PRIO);
 		DEBUGASSERT(ret == 0);
 		if (current_regs) {
@@ -465,9 +481,9 @@ static void _up_assert(int errorcode)
 		for (;;) {
 #ifdef CONFIG_ARCH_LEDS
 			//board_led_on(LED_PANIC);
-			up_mdelay(250);
+//			up_mdelay(250);
 			//board_led_off(LED_PANIC);
-			up_mdelay(250);
+//			up_mdelay(250);
 #endif
 		}
 #ifndef CONFIG_BOARD_ASSERT_SYSTEM_BLOCK
@@ -506,16 +522,19 @@ void dump_all_stack(void)
 
 void up_assert(const uint8_t *filename, int lineno)
 {
-	board_led_on(LED_ASSERTION);
+//	board_led_on(LED_ASSERTION);
+	gpio_pinset_t w_set;
+	w_set = GPIO_PIN17 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	imxrt_gpio_write(w_set, true);
 
 #if defined(CONFIG_DEBUG_DISPLAY_SYMBOL) || defined(CONFIG_BINMGR_RECOVERY)
 	abort_mode = true;
 #endif
 
 #if CONFIG_TASK_NAME_SIZE > 0
-	lldbg("Assertion failed at file:%s line: %d task: %s\n", filename, lineno, this_task()->name);
+//	lldbg("Assertion failed at file:%s line: %d task: %s\n", filename, lineno, this_task()->name);
 #else
-	lldbg("Assertion failed at file:%s line: %d\n", filename, lineno);
+//	lldbg("Assertion failed at file:%s line: %d\n", filename, lineno);
 #endif
 
 #ifdef CONFIG_BINMGR_RECOVERY
@@ -529,7 +548,7 @@ void up_assert(const uint8_t *filename, int lineno)
 #endif
 
 #if !defined(CONFIG_BINMGR_RECOVERY) && !defined(CONFIG_BOARD_ASSERT_SYSTEM_BLOCK)
-	up_dumpstate();
+//	up_dumpstate();
 #endif
 
 #if defined(CONFIG_BOARD_ASSERT_AUTORESET) && !defined(CONFIG_BINMGR_RECOVERY)

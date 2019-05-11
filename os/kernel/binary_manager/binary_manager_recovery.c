@@ -33,8 +33,24 @@
 #include <tinyara/init.h>
 #include <tinyara/board.h>
 
+#include "sched/sched.h"
 #include "binary_manager.h"
 #include "task/task.h"
+
+#include <tinyara/irq.h>
+#include <tinyara/arch.h>
+#include <signal.h>
+#include "../../arch/arm/src/imxrt/imxrt_gpio.h"
+#include "../../arch/arm/include/imxrt/imxrt105x_irq.h"
+#include "../../arch/arm/src/imxrt/chip/imxrt105x_pinmux.h"
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
+#define IOMUX_SW8       (IOMUX_SLEW_FAST | IOMUX_DRIVE_50OHM | \
+		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
+		_IOMUX_PULL_ENABLE)
 
 extern bool abort_mode;
 
@@ -71,6 +87,7 @@ static void binary_manager_board_reset(void)
 static void recovery_kill_each(FAR struct tcb_s *tcb, FAR void *arg)
 {
 	int ret;
+	irqstate_t flags;
 	binmgr_kill_data_t *info;
 
 	info = (binmgr_kill_data_t *)arg;
@@ -80,7 +97,13 @@ static void recovery_kill_each(FAR struct tcb_s *tcb, FAR void *arg)
 
 	if (tcb->group->tg_loadtask == info->binid && tcb->pid != info->binid) {
 		bmllvdbg("KILL!! %d\n", tcb->pid);
-		ret = task_terminate(tcb->pid, true);
+	    flags = irqsave();
+	    (void)sched_removereadytorun(tcb);
+	    tcb->task_state = TSTATE_TASK_INACTIVE;
+	    dq_addlast((FAR dq_entry_t *)tcb, (dq_queue_t *)&g_inactivetasks);
+	    irqrestore(flags);
+	    bmllvdbg("Remove pid %d from readytorun list\n", tcb->pid);
+		//ret = task_terminate(tcb->pid, true);
 	}
 }
 
@@ -102,9 +125,11 @@ static void recovery_kill_each(FAR struct tcb_s *tcb, FAR void *arg)
  ****************************************************************************/
 static int recovery_kill_binary(pid_t pid, int binid)
 {
+	irqstate_t flags;
+	struct tcb_s *tcb;
+	binmgr_kill_data_t info;
 	int ret;
 
-	binmgr_kill_data_t info;
 
 	if (pid < 0 || binid < 0) {
 		return ERROR;
@@ -117,15 +142,27 @@ static int recovery_kill_binary(pid_t pid, int binid)
 	/* Search all task/pthreads created by same loaded task */
 	sched_foreach(recovery_kill_each, (FAR void *)&info);
 
+ tcb = sched_gettcb(binid);
+    if (tcb != NULL) {
+        flags = irqsave();
+        (void)sched_removereadytorun(tcb);
+        tcb->task_state = TSTATE_TASK_INACTIVE;
+        dq_addlast((FAR dq_entry_t *)tcb, (dq_queue_t *)&g_inactivetasks);
+        irqrestore(flags);
+        bmllvdbg("Remove pid %d from readytorun list\n", tcb->pid);
+        return OK;
+    }
+	return ERROR;
+
 	/* Finally, unload binary */
-	ret = task_terminate(binid, true);
+	/*ret = task_terminate(binid, true);
 	if (ret < 0) {
 		bmlldbg("Failed to unload binary %d, ret %d, errno %d\n", binid, ret, errno);
 		return ERROR;
 	}
 	bmllvdbg("Unload binary! pid %d\n", binid);
 
-	return OK;
+	return OK;*/
 }
 
 /****************************************************************************
@@ -154,6 +191,8 @@ void binary_manager_recovery(int pid)
 	char data_str[1];
 	struct tcb_s *tcb;
 	char *loading_data[LOADTHD_ARGC + 1];
+	gpio_pinset_t w_set;
+	w_set = GPIO_PIN17 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
 
 	bmllvdbg("Try to recover fault with pid %d\n", pid);
 
@@ -172,7 +211,7 @@ void binary_manager_recovery(int pid)
 			bmlldbg("binary pid %d is not registered to binary manager\n", bin_id);
 			goto reboot_board;
 		}
-
+imxrt_gpio_write(w_set, false);
 		/* Kill its children and restart binary if the binary is registered with the binary manager */
 		ret = recovery_kill_binary(pid, bin_id);
 		if (ret == OK) {
@@ -181,13 +220,16 @@ void binary_manager_recovery(int pid)
 			memset(loading_data, 0, sizeof(char *) * (LOADTHD_ARGC + 1));
 			loading_data[0] = itoa(LOADCMD_LOAD, type_str, 10);
 			loading_data[1] = itoa(bin_idx, data_str, 10);
+			imxrt_gpio_write(w_set, true);
 			ret = binary_manager_loading(loading_data);
 			if (ret > 0) {
 				abort_mode = false;
+				imxrt_gpio_write(w_set, false);
 				return 0;
 			}
 		}
 	}
+
 
 reboot_board:
 	/* Reboot the board  */

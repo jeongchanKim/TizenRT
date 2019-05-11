@@ -102,6 +102,9 @@
 		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
 		_IOMUX_PULL_ENABLE)
 
+#define GPIO_SW8        (GPIO_INTERRUPT | GPIO_INT_FALLINGEDGE | \
+		GPIO_PORT5 | GPIO_PIN0 | IOMUX_SW8)
+
 static int chk_irq_handler = 0;
 /****************************************************************************
  * Pre-processor Definitions
@@ -232,8 +235,21 @@ static inline void os_workqueues(void)
 
 static int gpio_1_21_handler(int irq, FAR void *context, FAR void *arg)
 {
-	//send signal to wifi
+	//send to wifi
+	kill(9, 2);
+	
+	//send signal to micom
 	kill(8, 1);
+
+	return 0;
+}
+
+static int btn_handler(int irq, FAR void *context, FAR void *arg)
+{
+	//Turn on 20
+	gpio_pinset_t w_set;
+	w_set = GPIO_PIN20 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	imxrt_gpio_write(w_set, true);
 
 	return 0;
 }
@@ -242,9 +258,18 @@ static int gpio_task(int argc, char **argv)
 {
 	int ret;
 	bool val = true;
+	gpio_pinset_t s_set;
 	gpio_pinset_t w_set;
 	gpio_pinset_t r_set;
 	gpio_pinset_t a_set;
+
+	lldbg("!!! GPIO !!!\n");
+	s_set = GPIO_PIN16 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	ret = imxrt_config_gpio(s_set);//GPIO_1_16 - WRITE
+	if (ret != OK) {
+		lldbg("config fail for port_1_pin_20, write.\n");
+		return -1;
+	}	
 
  	w_set = GPIO_PIN20 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
 	ret = imxrt_config_gpio(w_set);//GPIO_1_20 - WRITE
@@ -260,10 +285,10 @@ static int gpio_task(int argc, char **argv)
 		return -1;
 	}
 
- 	a_set = GPIO_PIN22 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
-	ret = imxrt_config_gpio(a_set);//GPIO_1_22 - WRITE
+	a_set = GPIO_PIN17 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	ret = imxrt_config_gpio(a_set);//GPIO_1_21 - READ
 	if (ret != OK) {
-		lldbg("config fail for port_1_pin_22, write.\n");
+		lldbg("config fail for port_1_pin_21, read.\n");
 		return -1;
 	}
 
@@ -275,11 +300,25 @@ static int gpio_task(int argc, char **argv)
 
  	up_enable_irq(IMXRT_IRQ_GPIO1_21);
 
+	//User Button
+	ret = imxrt_config_gpio(GPIO_SW8);//GPIO_1_21 - READ
+	if (ret != OK) {
+		lldbg("config fail for port_1_pin_21, read.\n");
+		return -1;
+	}
+ 	ret = irq_attach(IMXRT_IRQ_GPIO5_0, (xcpt_t)btn_handler, (void *)0);
+	if (ret != OK) {
+		lldbg("irq_attach fail.\n");
+		return -1;
+	}
+
+ 	up_enable_irq(IMXRT_IRQ_GPIO5_0);
+/*
 	while (1) {
 	 	sleep(1);
  		imxrt_gpio_write(w_set, true);
 	}
-
+*/
 	return 0;
 }
 
@@ -321,6 +360,11 @@ static inline void os_do_appstart(void)
 	net_initialize();
 #endif
 
+	pid = kernel_thread("gpio_test", 100, 1024, gpio_task, NULL);
+	if (pid < 0) {
+		sdbg("Failed to start binary manager");
+	}
+
 #ifdef CONFIG_SYSTEM_PREAPP_INIT
 	svdbg("Starting application init task\n");
 
@@ -338,16 +382,11 @@ static inline void os_do_appstart(void)
 #ifdef CONFIG_BINARY_MANAGER
 	svdbg("Starting binary manager thread\n");
 
-	pid = kernel_thread(BINARY_MANAGER_NAME, BINARY_MANAGER_PRIORITY, BINARY_MANAGER_STACKSIZE, binary_manager, NULL);
+	pid = kernel_thread(BINARY_MANAGER_NAME, BINARY_MANAGER_PRIORITY, BINARY_MANAGER_STACKSIZE, binary_manager, NULL);//BINARY_MANAGER_PRIORITY
 	if (pid < 0) {
 		sdbg("Failed to start binary manager");
 	}
 #endif
-
-	pid = kernel_thread("gpio_test", 100, 1024, gpio_task, NULL);
-	if (pid < 0) {
-		sdbg("Failed to start binary manager");
-	}
 
 #ifdef CONFIG_ENABLE_HEAPINFO
 	heapinfo_drv_register();

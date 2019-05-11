@@ -107,6 +107,7 @@
 
 #define TC_ADD_PIN21_HANDLER 6
 #define TC_WRITE_TO_PIN22    7
+#define TC_ADD_USER_HANDLER 8
 
 /****************************************************************************
  * Public Type Definitions

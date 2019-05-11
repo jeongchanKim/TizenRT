@@ -32,6 +32,20 @@
 
 #include "binary_manager.h"
 
+#include <tinyara/irq.h>
+#include <tinyara/arch.h>
+#include "../../arch/arm/src/imxrt/imxrt_gpio.h"
+#include "../../arch/arm/include/imxrt/imxrt105x_irq.h"
+#include "../../arch/arm/src/imxrt/chip/imxrt105x_pinmux.h"
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
+#define IOMUX_SW8       (IOMUX_SLEW_FAST | IOMUX_DRIVE_50OHM | \
+		IOMUX_SPEED_MEDIUM | IOMUX_PULL_UP_100K | \
+		_IOMUX_PULL_ENABLE)
+
 /****************************************************************************
  * Private Definitions
  ****************************************************************************/
@@ -109,6 +123,12 @@ void binary_manager_register_partition(int part_num, int part_type, char *name, 
 	}
 }
 
+void handler(int signo)
+{
+	//dbg("handler!!");
+	binary_manager_recovery(9);
+}
+
 /****************************************************************************
  * Main Function
  ****************************************************************************/
@@ -116,7 +136,7 @@ int binary_manager(int argc, char *argv[])
 {
 	int ret;
 	int nbytes;
-	sigset_t sigset;
+//	sigset_t sigset;
 	char type_str[1];
 	char data_str[1];
 	char *loading_data[LOADTHD_ARGC + 1];
@@ -132,8 +152,21 @@ int binary_manager(int argc, char *argv[])
 	/* Unset all signals except for SIGKILL */
 	sigfillset(&sigset);
 	sigdelset(&sigset, SIGKILL);
+//	sigdelset(&sigset, 23);
 	(void)sigprocmask(SIG_SETMASK, &sigset, NULL);
+/*
+	struct sigaction act;
 
+	//register signal handler
+	act.sa_handler = (_sa_handler_t)handler;
+	act.sa_flags = 0;
+
+	ret = sigaction(23, &act, NULL);
+	if (ret == (int)SIG_ERR) {
+		printf("sigaction Failed\n");
+		return -1;
+	}
+*/
 	/* Create binary manager message queue */
 	g_binmgr_mq_fd = mq_open(BINMGR_REQUEST_MQ, O_RDWR | O_CREAT, 0666, &attr);
 	if (g_binmgr_mq_fd < 0) {
@@ -163,13 +196,15 @@ int binary_manager(int argc, char *argv[])
 			continue;
 		}
 
-		sched_lock();
+//		sched_lock();
 
 		bmvdbg("Recevied Request msg : cmd = %d\n", request_msg);
 		switch (request_msg.cmd) {
 #ifdef CONFIG_BINMGR_RECOVERY
 		case BINMGR_FAULT:
-			binary_manager_recovery(request_msg.requester_pid);
+			{
+				binary_manager_recovery(request_msg.requester_pid);
+			}
 			break;
 #endif
 		case BINMGR_GET_INFO:
@@ -192,7 +227,7 @@ int binary_manager(int argc, char *argv[])
 			break;
 		}
 
-		sched_unlock();
+//		sched_unlock();
 	}
 
 binary_manager_exit:
