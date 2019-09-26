@@ -22,29 +22,83 @@
 #include <tinyara/config.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <unistd.h>
 #ifdef CONFIG_BINARY_MANAGER
 #include <binary_manager/binary_manager.h>
 #endif
 
+#include <fcntl.h>
+#include <mqueue.h>
+#include <string.h>
+#include <sys/types.h>
+#include <tinyara/timer.h>
+
 #include "wifiapp_internal.h"
+
+#include <messaging/messaging.h>
+
+#define ITERATION 1
+
+//#define JCKIM_MSG_FW 1
+#define TEST_DATA_SIZE 1000
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-static void display_test_scenario(void)
+int receiver_task(void)
 {
-	printf("\nSelect Test Scenario.\n");
-#ifdef CONFIG_EXAMPLES_MESSAGING_TEST
-	printf("\t-Press M or m : Messaging F/W Test\n");	
+	int ret;
+	struct mq_attr attr;
+	attr.mq_maxmsg = 100;
+	attr.mq_msgsize = TEST_DATA_SIZE + 1;
+	attr.mq_flags = 0;
+
+	printf("Receiver Started\n");
+
+	int frt_fd;
+	char path[_POSIX_PATH_MAX];
+	struct timer_status_s after;
+
+	snprintf(path, _POSIX_PATH_MAX, "/dev/timer%d", 0);
+#ifdef JCKIM_MSG_FW
+	msg_recv_buf_t recv_data;
+	recv_data.buf = (char *)malloc(TEST_DATA_SIZE + 1);
+	recv_data.buflen = TEST_DATA_SIZE + 1;
+#else
+	char *ret_first = (char *)malloc(TEST_DATA_SIZE + 1);
 #endif
-#ifdef CONFIG_EXAMPLES_RECOVERY_TEST
-	printf("\t-Press R or r : Recovery Test\n");
+
+	frt_fd = open(path, O_RDONLY);
+
+#ifdef JCKIM_MSG_FW
+	for (int i=0;i<ITERATION;i++) {
+		ret = messaging_recv_block("jckim", &recv_data);
+		if (ret < 0) {
+			printf("receiver) FAIL to recv : %d\n", get_errno());
+		}
+	}
+#else
+//	sleep(1);
+	mqd_t mqdes = mq_open("jckim", O_RDONLY | O_CREAT, 0666, &attr);
+	for (int i=0;i<ITERATION;i++) {
+		ret = mq_receive(mqdes, ret_first, TEST_DATA_SIZE + 1, 0);
+		if (ret < 0) {
+			printf("receiver) FAIL to recv : %d\n", get_errno());
+		}
+	}
 #endif
-#ifdef CONFIG_EXAMPLES_BINARY_UPDATE_TEST
-	printf("\t-Press U or u : Binary Update Test\n");
+	ioctl(frt_fd, TCIOC_GETSTATUS, (unsigned long)(uintptr_t)&after);
+	sleep(1);
+
+#ifndef JCKIM_MSG_FW
+	printf("1-%s\n", ret_first);
+#else
+	printf("2-%s\n", (char *)recv_data.buf);
 #endif
-	printf("\t-Press X or x : Terminate Tests.\n");
+
+	printf("RECEIVER FINISHED!! %u\n", after.timeleft);
+	return 0;
 }
 
 extern int preapp_start(int argc, char **argv);
@@ -55,63 +109,15 @@ int main(int argc, char **argv)
 int wifiapp_main(int argc, char **argv)
 #endif
 {
-	char ch;
-	bool is_testing = true;
-
 #if defined(CONFIG_SYSTEM_PREAPP_INIT) && defined(CONFIG_APP_BINARY_SEPARATION)
 	preapp_start(argc, argv);
 #endif
 
 	printf("This is WIFI App\n");
 
-#ifndef CONFIG_EXAMPLES_MICOM_TIMER_TEST
-#ifdef CONFIG_BINARY_MANAGER
-	int ret;
-	ret = binary_manager_notify_binary_started();
-	if (ret < 0) {
-		printf("WIFI notify 'START' state FAIL\n", ret);
-	}
-#endif
+	/////
+	receiver_task();
 
-#ifndef CONFIG_ENABLE_RECOVERY_AGING_TEST
-	while (is_testing) {
-		display_test_scenario();
-		ch = getchar();
-		switch (ch) {
-#ifdef CONFIG_EXAMPLES_MESSAGING_TEST
-		case 'M':
-		case 'm':
-			messaging_test();
-			break;
-#endif
-#ifdef CONFIG_EXAMPLES_RECOVERY_TEST
-		case 'R':
-		case 'r':
-			recovery_test();
-			is_testing = false;
-			break;
-#endif
-#ifdef CONFIG_EXAMPLES_BINARY_UPDATE_TEST
-		case 'U':
-		case 'u':
-			binary_update_test();
-			break;
-#endif
-		case 'X':
-		case 'x':
-			printf("Test will be finished.\n");
-			is_testing = false;
-			break;
-		default:
-			printf("Invalid Scenario.\n");
-			break;
-		}
-	}
-#else
-	recovery_test();
-#endif
-
-#endif /* CONFIG_EXAMPLES_MICOM_TIMER_TEST */
 	while (1) {
 		sleep(10);
 		printf("[%d] WIFI ALIVE\n", getpid());

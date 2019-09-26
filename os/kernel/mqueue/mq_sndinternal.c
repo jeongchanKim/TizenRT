@@ -367,8 +367,10 @@ int mq_dosend(mqd_t mqdes, FAR struct mqueue_msg_s *mqmsg, FAR const char *msg, 
 	mqmsg->msglen = msglen;
 
 	/* Copy the message data into the message */
+	int msg_addr = (int)msg;
 
-	memcpy((void *)mqmsg->mail, (FAR const void *)msg, msglen);
+//	memcpy((void *)mqmsg->mail, (FAR const void *)msg, msglen);
+	memcpy((void *)mqmsg->mail, &msg_addr, sizeof(int));
 
 	/* Insert the new message in the message queue */
 

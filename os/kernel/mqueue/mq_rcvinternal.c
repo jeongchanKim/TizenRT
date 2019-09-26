@@ -283,8 +283,10 @@ ssize_t mq_doreceive(mqd_t mqdes, FAR struct mqueue_msg_s *mqmsg, FAR char *ubuf
 	rcvmsglen = mqmsg->msglen;
 
 	/* Copy the message into the caller's buffer */
+	int msg_addr = 0;
+	memcpy(&msg_addr, mqmsg->mail, sizeof(void *));
 
-	memcpy(ubuffer, (const void *)mqmsg->mail, rcvmsglen);
+	memcpy(ubuffer, (const void *)msg_addr, rcvmsglen);
 
 	/* Copy the message priority as well (if a buffer is provided) */
 
