@@ -109,10 +109,10 @@ int up_memfault(int irq, FAR void *context, FAR void *arg)
 	/* Dump some memory management fault info */
 
 	(void)irqsave();
-	lldbg("PANIC!!! Memory Management Fault:\n");
+	//lldbg("PANIC!!! Memory Management Fault:\n");
 	mfdbg("  IRQ: %d context: %p\n", irq, regs);
-	lldbg("  CFAULTS: %08x MMFAR: %08x\n",
-		  getreg32(NVIC_CFAULTS), getreg32(NVIC_MEMMANAGE_ADDR));
+	//lldbg("  CFAULTS: %08x MMFAR: %08x\n",
+	//	  getreg32(NVIC_CFAULTS), getreg32(NVIC_MEMMANAGE_ADDR));
 	mfdbg("  BASEPRI: %08x PRIMASK: %08x IPSR: %08x CONTROL: %08x\n",
 		  getbasepri(), getprimask(), getipsr(), getcontrol());
 	mfdbg("  R0: %08x %08x %08x %08x %08x %08x %08x %08x\n",

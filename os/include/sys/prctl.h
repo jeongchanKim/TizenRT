@@ -102,6 +102,11 @@ enum prctl_type_e {
 	PR_CHECK_PREFERENCE,
 	PR_SET_PREFERENCE_CB,
 	PR_UNSET_PREFERENCE_CB,
+	TC_GPIO_PIN20_TRUE,
+	TC_GPIO_PIN20_FALSE,
+	TC_GPIO_PIN20_CONFIG,
+	TC_GPIO_PIN27_TRUE,
+	TC_GPIO_PIN27_FALSE,
 };
 
 /****************************************************************************

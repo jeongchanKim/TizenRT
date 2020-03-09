@@ -26,6 +26,9 @@
 #include <errno.h>
 #include <sched.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <mqueue.h>
+#include <semaphore.h>
 
 #if !defined(CONFIG_MPU_TEST_KERNEL_CODE_ADDR) || !defined(CONFIG_MPU_TEST_APP_ADDR)
 #error "Address not defined for MPU test"
@@ -36,87 +39,163 @@ static void *assert_thread(void *index)
 	int type;
 	volatile uint32_t *addr;
 
-	type = getpid() % 3;
-	if (type == 0) {
-		/* PANIC */
-		printf("[%d] %dth thread, PANIC!\n", getpid(), (int)index);
-		sleep(1);
-		PANIC();
-	} else if (type == 1) {
-		/* Access kernel code */
-		addr = (uint32_t *)CONFIG_MPU_TEST_KERNEL_CODE_ADDR;
-		printf("[%d] %dth thread, Write kernel code space 0x%x\n", getpid(), (int)index, addr);
-		sleep(1);
-		*addr = 0xdeadbeef;
-	} else {
-		/* Access another binary 'micom' address */
-		addr = (uint32_t *)CONFIG_MPU_TEST_APP_ADDR;
-		printf("[%d] %dth thread, Write another app space 0x%x\n", getpid(), (int)index, addr);
-		sleep(1);
-		*addr = 0xdeadbeef;
-	}
+	addr = (uint32_t *)CONFIG_MPU_TEST_KERNEL_CODE_ADDR;
+	sleep(10);
+	*addr = 0xdeadbeef;
 
 	return 0;
 }
+
+///////////////////// threads
 
 static void *normal_thread(void *index)
 {
-	printf("[%d] %dth thread, normal thread\n", getpid(), (int)index);
+	while (1) {
+		sleep(10);
+	};
 
-	while (1);
-	return 0;
 }
 
-static int assert_group_main_task(int argc, char *argv[])
+static void *sem_wait_thread(void *index)
 {
-	int count;
-	pthread_t thd;
-	pthread_attr_t attr;
+	sem_t test_sem;
 
-	printf("[%d] assert_group_main_task \n", getpid());
+	sem_init(&test_sem, 0, 0);
+	sem_wait(&test_sem);
 
-	pthread_attr_init(&attr);
-
-	for (count = 0; count < 2; count++) {
-		pthread_create(&thd, &attr, (pthread_startroutine_t)normal_thread, (pthread_addr_t)count);
-	}
-	pthread_create(&thd, &attr, (pthread_startroutine_t)assert_thread, (pthread_addr_t)count);
-
-	while (1);
-
-	return 0;
 }
+
+static void *mq_wait_thread(void *index)
+{
+	int nbytes;
+	mqd_t mqfd;
+	char mq_name[32];
+	char data[32];
+
+	struct mq_attr attr;
+	attr.mq_maxmsg = 32;
+	attr.mq_msgsize = 16;
+	attr.mq_flags = 0;
+
+	memset(mq_name, 0, 32);
+
+	sprintf(mq_name, "mymqueue%d", getpid());
+	
+	mqfd = mq_open(mq_name, O_RDWR | O_CREAT, 0666, &attr);
+	if (mqfd < 0) {
+		printf("Failed to open message queue\n");
+		return 0;
+	}
+
+	nbytes = mq_receive(mqfd, (char *)data, 32, NULL);
+	if (nbytes <= 0) {
+		printf("Receive ERROR %d, errno %d, retry!\n", nbytes, errno);
+	}
+}
+
+/////////////////////tasks
 
 static int normal_task(int argc, char *argv[])
 {
-	printf("[%d] normal_task \n", getpid());
-
-	while (1);
-
-	return 0;
+	while (1) {
+		sleep(10);
+	}
 }
 
-static int make_children_task(int argc, char *argv[])
+static int sem_wait_task(int argc, char *argv[])
+{
+	sem_t test_sem;
+
+	sem_init(&test_sem, 0, 0);
+	sem_wait(&test_sem);
+}
+
+static int mq_wait_task(int argc, char *argv[])
+{
+	int nbytes;
+	mqd_t mqfd;
+	char mq_name[32];
+	char data[32];
+
+	struct mq_attr attr;
+	attr.mq_maxmsg = 32;
+	attr.mq_msgsize = 16;
+	attr.mq_flags = 0;
+
+	memset(mq_name, 0, 32);
+
+	sprintf(mq_name, "mymqueue%d", getpid());
+	
+	mqfd = mq_open(mq_name, O_RDWR | O_CREAT, 0666, &attr);
+	if (mqfd < 0) {
+		printf("Failed to open message queue\n");
+		return 0;
+	}
+
+	nbytes = mq_receive(mqfd, (char *)data, 32, NULL);
+	if (nbytes <= 0) {
+		printf("Receive ERROR %d, errno %d, retry!\n", nbytes, errno);
+	}
+ 
+}
+
+static void paper_test(void)
 {
 	int pid;
+	int i;
+	pthread_t thd;
+	pthread_attr_t attr;
 
-	printf("[%d] make_children_task \n", getpid());
+	pthread_attr_init(&attr);
 
-	pid = task_create("normal", 100, 1024, normal_task, (FAR char *const *)NULL);
+//wait mqueue
+for (i = 0; i < 10; i++) {
+	pid = task_create("mqwait", 100, 1024, normal_task, (FAR char *const *)NULL);
 	if (pid < 0) {
 		printf("task create FAIL\n");
 		return 0;
+	}		
+	//pthread_create(&thd, &attr, (pthread_startroutine_t)mq_wait_thread, (pthread_addr_t)NULL);
+}
+
+#if 0
+	//wait sem (include tash task)
+	for (i = 0; i < 3; i++) {
+		pid = task_create("semwait", 100, 1024, sem_wait_task, (FAR char *const *)NULL);
+		if (pid < 0) {
+			printf("task create FAIL\n");
+			return 0;
+		}		
+		pthread_create(&thd, &attr, (pthread_startroutine_t)sem_wait_thread, (pthread_addr_t)NULL); 	
+		pthread_create(&thd, &attr, (pthread_startroutine_t)sem_wait_thread, (pthread_addr_t)NULL); 	
+	}
+	pthread_create(&thd, &attr, (pthread_startroutine_t)sem_wait_thread, (pthread_addr_t)NULL); 	
+	pthread_create(&thd, &attr, (pthread_startroutine_t)sem_wait_thread, (pthread_addr_t)NULL); 	
+
+	//wait mqueue
+	for (i = 0; i < 4; i++) {
+		pid = task_create("mqwait", 100, 1024, mq_wait_task, (FAR char *const *)NULL);
+		if (pid < 0) {
+			printf("task create FAIL\n");
+			return 0;
+		}		
+		pthread_create(&thd, &attr, (pthread_startroutine_t)mq_wait_thread, (pthread_addr_t)NULL);
+		pthread_create(&thd, &attr, (pthread_startroutine_t)mq_wait_thread, (pthread_addr_t)NULL);
 	}
 
-	pid = task_create("assert_group_main", 100, 1024, assert_group_main_task, (FAR char *const *)NULL);
-	if (pid < 0) {
-		printf("task create FAIL\n");
-		return 0;
+	//wait signal (include main task)
+	for (i = 0; i < 3; i++) {
+		pid = task_create("sigwait", 100, 1024, normal_task, (FAR char *const *)NULL);
+		if (pid < 0) {
+			printf("task create FAIL\n");
+			return 0;
+		}
+		pthread_create(&thd, &attr, (pthread_startroutine_t)normal_thread, (pthread_addr_t)NULL);
+		pthread_create(&thd, &attr, (pthread_startroutine_t)normal_thread, (pthread_addr_t)NULL);
 	}
-
-	while (1);
-
-	return 0;
+	pthread_create(&thd, &attr, (pthread_startroutine_t)normal_thread, (pthread_addr_t)NULL);
+	pthread_create(&thd, &attr, (pthread_startroutine_t)assert_thread, (pthread_addr_t)NULL);
+#endif
 }
 
 /****************************************************************************
@@ -127,10 +206,25 @@ void recovery_test(void)
 {
 	int pid;
 
-	pid = task_create("mkchildren", 100, 1024, make_children_task, (FAR char *const *)NULL);
+	/*pid = task_create("mkchildren", 100, 1024, make_children_task, (FAR char *const *)NULL);
 	if (pid < 0) {
 		printf("task create FAIL\n");
 		return;
 	}
+
+	pid = task_create("normal", 100, 1024, normal_task, (FAR char *const *)NULL);
+	if (pid < 0) {
+		printf("task create FAIL\n");
+		return 0;
+	}
+
+	/*pid = task_create("assert_group_main", 100, 1024, assert_group_main_task, (FAR char *const *)NULL);
+	if (pid < 0) {
+		printf("task create FAIL\n");
+		return 0;
+	}*/
+
+	paper_test();
+
 	printf("I'm RECOVERY main! create mkchildren task %d\n", pid);
 }

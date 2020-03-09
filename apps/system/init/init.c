@@ -135,6 +135,7 @@ int preapp_start(int argc, char *argv[])
 	}
 #endif
 
+#if 0
 #ifdef CONFIG_SCHED_USRWORK
 	/* Start the user-space work queue */
 	ret = work_usrstart();
@@ -142,6 +143,7 @@ int preapp_start(int argc, char *argv[])
 		printf("user work queue is failed to start, error code is %d\n", ret);
 		return ret;
 	}
+#endif
 #endif
 
 #ifdef CONFIG_TASH

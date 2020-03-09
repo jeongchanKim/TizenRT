@@ -55,8 +55,6 @@ int main(int argc, char **argv)
 int wifiapp_main(int argc, char **argv)
 #endif
 {
-	char ch;
-	bool is_testing = true;
 
 #if defined(CONFIG_SYSTEM_PREAPP_INIT) && defined(CONFIG_APP_BINARY_SEPARATION)
 	preapp_start(argc, argv);
@@ -64,6 +62,9 @@ int wifiapp_main(int argc, char **argv)
 
 	printf("This is WIFI App\n");
 
+	prctl(TC_GPIO_PIN20_CONFIG);
+
+#if 0
 #ifndef CONFIG_EXAMPLES_MICOM_TIMER_TEST
 #ifdef CONFIG_BINARY_MANAGER
 	int ret;
@@ -110,8 +111,15 @@ int wifiapp_main(int argc, char **argv)
 #else
 	recovery_test();
 #endif
-
 #endif /* CONFIG_EXAMPLES_MICOM_TIMER_TEST */
+
+#endif
+	recovery_test();
+
+	//addr = (uint32_t *)CONFIG_MPU_TEST_KERNEL_CODE_ADDR;
+	//sleep(3);
+	//*addr = 0xdeadbeef;
+
 	while (1) {
 		sleep(10);
 		printf("[%d] WIFI ALIVE\n", getpid());

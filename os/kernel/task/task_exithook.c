@@ -617,7 +617,7 @@ void task_exithook(FAR struct tcb_s *tcb, int status, bool nonblocking)
 	 */
 
 	if (!nonblocking) {
-		task_flushstreams(tcb);
+//		task_flushstreams(tcb);
 	}
 
 

@@ -104,6 +104,16 @@
 #include "up_internal.h"
 #include "mpu.h"
 
+
+#include "../../src/imxrt/imxrt_gpio.h"
+#include "../../include/imxrt/imxrt102x_irq.h"
+#include "../../src/imxrt/chip/imxrt102x_pinmux.h"
+
+
+#define IOMUX_GOUT      (IOMUX_PULL_NONE | IOMUX_CMOS_OUTPUT | \
+                         IOMUX_DRIVE_40OHM | IOMUX_SPEED_MEDIUM | \
+                         IOMUX_SLEW_SLOW)
+
 #ifdef CONFIG_BINMGR_RECOVERY
 bool abort_mode = false;
 extern uint32_t g_assertpc;
@@ -450,6 +460,8 @@ static void recovery_user_assert(void)
 	int bin_idx;
 	struct tcb_s *tcb;
 	struct faultmsg_s *msg;
+	gpio_pinset_t w_set;
+	w_set = GPIO_PIN28 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
 
 	tcb = this_task();
 	if (tcb != NULL && tcb->group != NULL) {
@@ -461,12 +473,21 @@ static void recovery_user_assert(void)
 			/* Exclude realtime task/pthreads from scheduling */
 			binary_manager_exclude_rtthreads(tcb);
 		}
+		////imxrt_gpio_write(w_set, false);
+		//dq_rem((FAR dq_entry_t *)tcb, (dq_queue_t *)g_tasklisttable[tcb->task_state].list);
+		//struct tcb_s *tttt = this_task();
+		//up_restorestate(tttt->xcp.regs);
+		//dq_addlast((FAR dq_entry_t *)tcb, (FAR dq_queue_t *)g_tasklisttable[TSTATE_TASK_INACTIVE].list);
+		//tcb->task_state = TSTATE_TASK_INACTIVE;
+
+		////imxrt_gpio_write(w_set, true);
 
 		/* Add fault message and Unblock Fault message Sender */
 		if (g_faultmsg_sender && (msg = (faultmsg_t *)sq_remfirst(&g_freemsg_list))) {
 			msg->binid = binid;
 			sq_addlast((sq_entry_t *)msg, (sq_queue_t *)&g_faultmsg_list);
 			up_unblock_task(g_faultmsg_sender);
+			imxrt_gpio_write(w_set, false);
 			return;
 		}
 	}
@@ -504,6 +525,10 @@ void dump_all_stack(void)
 
 void up_assert(const uint8_t *filename, int lineno)
 {
+	gpio_pinset_t w_set;
+	w_set = GPIO_PIN28 | GPIO_PORT1 | GPIO_OUTPUT | IOMUX_GOUT;
+	imxrt_gpio_write(w_set, true);
+
 	board_led_on(LED_ASSERTION);
 
 #if defined(CONFIG_DEBUG_DISPLAY_SYMBOL) || defined(CONFIG_BINMGR_RECOVERY)
@@ -511,9 +536,9 @@ void up_assert(const uint8_t *filename, int lineno)
 #endif
 
 #if CONFIG_TASK_NAME_SIZE > 0
-	lldbg("Assertion failed at file:%s line: %d task: %s\n", filename, lineno, this_task()->name);
+	//lldbg("Assertion failed at file:%s line: %d task: %s\n", filename, lineno, this_task()->name);
 #else
-	lldbg("Assertion failed at file:%s line: %d\n", filename, lineno);
+	//lldbg("Assertion failed at file:%s line: %d\n", filename, lineno);
 #endif
 
 #ifdef CONFIG_BINMGR_RECOVERY
@@ -534,7 +559,7 @@ void up_assert(const uint8_t *filename, int lineno)
 
 #endif  /* CONFIG_BINMGR_RECOVERY */
 
-	up_dumpstate();
+	//up_dumpstate();
 
 #if defined(CONFIG_BOARD_CRASHDUMP)
 	board_crashdump(up_getsp(), this_task(), (uint8_t *)filename, lineno);
