@@ -327,7 +327,7 @@ static inline void os_do_appstart(void)
 		pid = task_create("appmain", SCHED_PRIORITY_DEFAULT, CONFIG_USERMAIN_STACKSIZE, USERSPACE->us_entrypoint, (FAR char *const *)NULL);
 	}
 #elif defined(CONFIG_USER_ENTRYPOINT)
-	pid = task_create("appmain", SCHED_PRIORITY_DEFAULT, CONFIG_USERMAIN_STACKSIZE, (main_t)CONFIG_USER_ENTRYPOINT, (FAR char *const *)NULL);
+	pid = task_create("appmain", 255, CONFIG_USERMAIN_STACKSIZE, (main_t)CONFIG_USER_ENTRYPOINT, (FAR char *const *)NULL);
 #endif
 #endif // !CONFIG_BINARY_MANAGER
 
