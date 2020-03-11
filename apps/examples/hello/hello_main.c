@@ -57,6 +57,12 @@
 #include <tinyara/config.h>
 #include <stdio.h>
 
+#include "../../../os/arch/arm/src/stm32l4/stm32l4_gpio.h"
+
+#define MY_GPIO \
+  (GPIO_PORTB | GPIO_PIN0 | GPIO_OUTPUT_CLEAR | GPIO_OUTPUT | GPIO_PUSHPULL | \
+   GPIO_PULLUP | GPIO_SPEED_50MHz)
+
 /****************************************************************************
  * hello_main
  ****************************************************************************/
@@ -68,5 +74,10 @@ int hello_main(int argc, char *argv[])
 #endif
 {
 	printf("Hello, World!!\n");
+	for (int i =0;i<3;i++) {
+		stm32l4_gpiowrite(MY_GPIO, true);
+		sleep(1);
+		stm32l4_gpiowrite(MY_GPIO, false);	
+	}
 	return 0;
 }
