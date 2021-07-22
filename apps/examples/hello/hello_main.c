@@ -60,6 +60,12 @@
 /****************************************************************************
  * hello_main
  ****************************************************************************/
+int cnt;
+int jctest(int a, char *g[])
+{
+	printf("\n!!! jc : %d\n", cnt++);
+	return 0;
+}
 
 #ifdef CONFIG_BUILD_KERNEL
 int main(int argc, FAR char *argv[])
@@ -68,5 +74,10 @@ int hello_main(int argc, char *argv[])
 #endif
 {
 	printf("Hello, World!!\n");
+
+	while (1) {
+		task_create("jctest", 100, 1024, jctest, NULL);
+		sleep(1);
+	}
 	return 0;
 }
